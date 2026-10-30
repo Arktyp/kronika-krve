@@ -2,26 +2,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Vypravěč: tento e-mail (musí být ověřený) smí ČÍST postavy všech hráčů
+    // Vypravěč: tento účet (User UID z Authentication → Users) vidí postavy všech hráčů
+    // a smí jim předat postavu do účtu
     function isStoryteller() {
       return request.auth != null
-        && request.auth.token.email == 'patrik.stastny@email.cz'
-        && request.auth.token.email_verified == true;
+        && request.auth.uid in ['p5qnhlYFwoackavMYWD6owFkIYh2'];
     }
     function isMe(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // Postavy, knihovna a NPC každého hráče: zapisuje jen on sám
+    // Postavy, knihovna a NPC každého hráče: zapisuje on sám (a Vypravěč při předání postavy)
     match /data/users/{uid}/{doc=**} {
       allow read, write: if isMe(uid);
-      allow read: if isStoryteller();
+      allow read, write: if isStoryteller();
     }
 
     // Seznam postav pro přehled Vypravěče
     match /roster/{uid} {
       allow read, write: if isMe(uid);
-      allow read: if isStoryteller();
+      allow read, write: if isStoryteller();
     }
 
     // Všechno ostatní je zakázané

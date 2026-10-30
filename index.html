@@ -352,7 +352,7 @@ pre.json{max-height:220px;overflow:auto;background:var(--sunk);padding:10px;bord
 </head><body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v38 · 30. 10. 2026</span></h1><div class="who" id="who"></div></div>
+    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v39 · 30. 10. 2026</span></h1><div class="who" id="who"></div></div>
     <div class="inline" style="gap:14px;align-items:center"><label class="themesel">Vzhled <select id="themeSel" aria-label="Vzhled aplikace"><option value="auto">Podle systému</option><option value="light">Světlý</option><option value="dark">Tma a krev</option><option value="night">Noční Praha</option><option value="parchment">Pergamen</option></select></label><div class="status" id="status"><i></i><span>Načítám…</span></div></div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Sekce"></nav>
@@ -1026,7 +1026,10 @@ async function stOpen(uid,cid){ST.view={uid,cid,loading:true};render();
   try{const d=await cloud.db.doc(`data/users/${uid}/c_${cid}`).get();if(!d.exists)throw 0;ST.view={uid,cid,c:fixChar(JSON.parse(d.data().json)),updated:d.data().updated}}catch(e){ST.view={uid,cid,err:"Postavu se nepodařilo načíst (hráč ji mohl smazat)."}}
   render()}
 function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
-  const pname=uid=>ST.names[uid]||"Hráč "+uid.slice(0,6);const V=ST.view;
+  const pname=stPName;const V=ST.view;
+  const mineBtn=c=>`<button class="pitem mine" style="text-align:left" data-act="open" data-id="${esc(c.id)}" data-go="sheet"><span class="pn">${esc(c.name||"Bez jména")}<span class="cz">${esc([c.clan,c.predator].filter(Boolean).join(" · "))}</span><span class="cz" style="color:var(--blood)">· u tebe</span></span><span class="small muted">${esc(c.concept||"")}</span><span class="mono small">XP ${xpAvail(c)} · Humanity ${c.trk.hum}${c.xpMode?"":" · neuzamčená"}</span></button>`;
+  const matched=new Set();(ST.players||[]).forEach(p=>mineFor(p).forEach(c=>matched.add(c.id)));
+  const orphan={};S.order.map(i=>S.chars[i]).filter(c=>c&&!c.example&&c.player&&!matched.has(c.id)).forEach(c=>{(orphan[c.player]=orphan[c.player]||[]).push(c)});
   if(V){const c=V.c;return `<section class="sec"><div class="sec-h"><h2>${c?esc(c.name||"Bez jména"):"Postava"}</h2><span class="hint">${esc(pname(V.uid))}${V.updated?" · uloženo "+new Date(V.updated).toLocaleString("cs-CZ"):""}</span></div>
     <div class="inline" style="margin-bottom:12px"><button class="btn" data-act="stBack">← Všichni hráči</button>${c?`<button class="btn" data-act="stReload">Načíst znovu</button><button class="btn pri" data-act="stPdf">Stáhnout PDF</button><button class="btn ghost" data-act="stCopy">Uložit kopii k sobě</button>`:""}</div>
     ${V.loading?`<p class="muted">Načítám…</p>`:V.err?`<p class="note">${esc(V.err)}</p>`:`${(()=>{const n=auditCount(c);return `<div class="note" style="margin-bottom:12px">Kontrola postavy: ${n.err+n.warn?`<b>${n.err} ${plural(n.err,"chyba","chyby","chyb")}, ${n.warn} k doplnění</b> – ${esc(n.all.filter(x=>x.lvl!=="info").slice(0,4).map(x=>x.msg).join(" · "))}${n.err+n.warn>4?"…":""}`:"vše v pořádku"} · XP k dispozici ${xpAvail(c)} · Hunger ${c.trk.hunger} · Humanity ${c.trk.hum}</div>`})()}<div class="sheetprev"><style>${SHEET_CSS}</style><div class="sheetscale">${sheetHTML(c)}</div></div>`}</section>`}
@@ -1034,13 +1037,36 @@ function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
    <p class="small muted" style="margin:0 0 12px">Vidíš to jen ty jako vlastník stránky. Hráči vidí jen své postavy. Seznam se aktualizuje, když hráč aplikaci otevře a uloží změnu.</p>
    ${ST.err?`<p class="note">${esc(ST.err)}</p>`:""}
    ${ST.players===null?`<p class="muted">Načítám…</p>`:ST.players.length?ST.players.map(p=>`<div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">${esc(pname(p.uid))}</span><span class="small muted" style="margin-left:auto">${p.updated?"naposledy "+new Date(p.updated).toLocaleString("cs-CZ"):""}</span></div>
-     ${(p.chars||[]).length?`<div class="grid g3" style="gap:10px">${p.chars.map(ch=>`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="${esc(ch.id)}"><span class="pn">${esc(ch.name||"Bez jména")}<span class="cz">${esc([ch.clan,ch.pred].filter(Boolean).join(" · "))}</span></span><span class="small muted">${esc(ch.concept||"")}</span><span class="mono small">XP ${esc(ch.xp)} · Humanity ${esc(ch.hum)}${ch.locked?"":" · neuzamčená"}</span></button>`).join("")}</div>`:`<p class="small muted">Zatím žádná postava.</p>`}</div>`).join(""):`<div class="note">Zatím se nepřipojil žádný hráč. Pošli hráčům odkaz (viz Sdílení s hráči níže) – jakmile aplikaci otevřou a uloží postavu, objeví se tady.</div>`}
+     ${(p.chars||[]).length||mineFor(p).length?`<div class="grid g3" style="gap:10px">${mineFor(p).map(mineBtn).join("")}${(p.chars||[]).map(ch=>`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="${esc(ch.id)}"><span class="pn">${esc(ch.name||"Bez jména")}<span class="cz">${esc([ch.clan,ch.pred].filter(Boolean).join(" · "))}</span></span><span class="small muted">${esc(ch.concept||"")}</span><span class="mono small">XP ${esc(ch.xp)} · Humanity ${esc(ch.hum)}${ch.locked?"":" · neuzamčená"}</span></button>`).join("")}</div>`:`<p class="small muted">Zatím žádná postava.</p>`}</div>`).join(""):""}
+   ${Object.keys(orphan).map(n=>`<div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">${esc(n)}</span><span class="small muted" style="margin-left:auto">zatím bez účtu – postavy máš u sebe</span></div><div class="grid g3" style="gap:10px">${orphan[n].map(mineBtn).join("")}</div></div>`).join("")}
+   ${ST.players&&!ST.players.length&&!Object.keys(orphan).length?`<div class="note">Zatím se nepřipojil žádný hráč. Pošli hráčům odkaz (viz Sdílení s hráči níže) – jakmile aplikaci otevřou a uloží postavu, objeví se tady. Postavu, kterou máš u sebe, můžeš hráči přiřadit na Listu postavy v části Identity.</div>`:""}
    ${typeof WEB!=="undefined"&&WEB.on?`<details class="card" style="margin-top:16px"><summary style="cursor:pointer"><b>Sdílení s hráči – jak na to</b></summary><ol class="small" style="margin:8px 0 0;padding-left:18px;line-height:1.6"><li>Pošli hráčům adresu této stránky.</li><li>Každý se přihlásí přes Google, nebo si vytvoří účet e-mailem a heslem.</li><li>Jakmile si uloží postavu, objeví se tady. Cizí postavy hráči nevidí.</li></ol></details>`:""}
    ${typeof WEB!=="undefined"&&WEB.on?"":`<details class="card" style="margin-top:16px"><summary style="cursor:pointer"><b>Sdílení s hráči – jak na to</b></summary><ol class="small" style="margin:8px 0 0;padding-left:18px;line-height:1.6">
     <li>Otevři menu <b>Sdílet</b> u této stránky v Claude.</li>
     <li>Pozvi každého hráče e-mailem. Aby mohl ukládat, potřebuje úroveň, která smí zapisovat: v týmovém plánu <b>Contributor</b>, v osobním plánu <b>Editor</b> pozvaný e-mailem (a stránka nesmí být zároveň sdílená veřejným odkazem).</li>
     <li>Hráč se přihlásí svým účtem Claude, otevře odkaz a vytváří postavy. Ukládají se do jeho účtu – ostatní hráči je nevidí, ty ano.</li>
    </ol></details>`}</section>`}
+
+// ---- přiřazení postavy hráči (vidí a mění jen Vypravěč)
+const stPName=uid=>ST.names[uid]||(ST.players||[]).find(p=>p.uid===uid)?.who||"Hráč "+String(uid).slice(0,6);
+const mineFor=p=>S.order.map(i=>S.chars[i]).filter(c=>c&&!c.example&&(c.playerUid?c.playerUid===p.uid:(c.player&&lc(c.player)===lc(stPName(p.uid)))));
+function assignBox(c){if(!ST.owner)return "";if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
+  const ps=ST.players||[],canGive=typeof WEB!=="undefined"&&WEB.on&&c.playerUid&&ps.some(p=>p.uid===c.playerUid);
+  const sel=c.playerUid&&ps.some(p=>p.uid===c.playerUid)?c.playerUid:(c.player||UI.assignName===c.id?"__name":"");
+  return `<div class="note assign" style="margin-top:12px"><div class="inline" style="flex-wrap:wrap;gap:8px"><b>Postava hráče</b><span class="small muted">vidíš jen ty jako Vypravěč – postava se pak ukáže v záložce Vypravěč u daného hráče</span></div>
+   <div class="inline" style="flex-wrap:wrap;gap:8px;margin-top:8px"><select data-act-change="assignP" aria-label="Přiřadit hráči"><option value=""${sel===""?" selected":""}>— moje postava (NPC / bez hráče) —</option>${ps.map(p=>`<option value="${esc(p.uid)}"${sel===p.uid?" selected":""}>${esc(stPName(p.uid))}</option>`).join("")}<option value="__name"${sel==="__name"?" selected":""}>hráč bez účtu – jen jméno…</option></select>
+    ${sel==="__name"?`<input type="text" data-f="player" value="${esc(c.player||"")}" placeholder="Jméno hráče" style="max-width:220px">`:""}
+    ${ST.loading?'<span class="small muted">načítám hráče…</span>':!ps.length?'<span class="small muted">Zatím se nepřihlásil žádný hráč – můžeš zadat jen jméno.</span>':""}
+    ${canGive?(UI.confirm==="give"?`<span class="confirm">Předat ${esc(c.name||"postavu")} do účtu hráče ${esc(stPName(c.playerUid))}? Hráč ji uvidí po dalším otevření aplikace, u tebe zmizí ze seznamu (najdeš ji v záložce Vypravěč). <button class="btn sm pri" data-act="stGive">Předat</button><button class="btn sm" data-act="cancel">Ne</button></span>`:`<button class="btn sm" data-act="askGive">Předat do účtu hráče…</button>`):""}</div></div>`}
+async function stGive(){const c=cur();if(!c||!c.playerUid||!cloud?.db)return;const to=c.playerUid,nm=stPName(to);UI.confirm=null;UI.busy=true;render();
+  try{const n=fixChar(clone(c));n.id=uid();n.player=nm;n.playerUid=to;n.xp=n.xp||[];n.xp.push({id:uid(),date:today(),amt:0,note:"Postavu předal Vypravěč",key:"note",lvl:0});
+    const now=Date.now();await cloud.db.doc(`data/users/${to}/c_${n.id}`).set({json:JSON.stringify(n),updated:now});
+    try{const r=await cloud.db.doc("roster/"+to).get();const b=r.exists?r.data():{chars:[]};const chars=(b.chars||[]).filter(x=>x.id!==n.id);
+      chars.push({id:n.id,name:n.name||"",clan:n.clan||"",concept:n.concept||"",pred:n.predator||"",xp:xpAvail(n),hum:n.trk?.hum??"",locked:!!n.xpMode});
+      await cloud.db.doc("roster/"+to).set({...b,chars,updated:now})}catch(e){}
+    delete S.chars[c.id];S.order=S.order.filter(x=>x!==c.id);S.cur=S.order[0]||null;touch("c_"+c.id);
+    UI.busy=false;UI.tab="st";ST.view=null;await stLoad();toast(`Předáno hráči ${nm}`)}
+  catch(e){UI.busy=false;render();toast("Předání se nepovedlo – nahrál jsi nová pravidla Firestore?")}}
 
 let cloud=null, dirty=new Set(), saveT=null, cloudNote="";
 function touch(key){S.stamps[key]=Date.now();dirty.add(key);scheduleSave()}
@@ -1433,7 +1459,7 @@ function fillDatalists(){
 function vChars(){
   const cards=S.order.map(id=>{const c=S.chars[id];if(!c)return"";const conf=UI.confirm===id;
     return `<article class="pc${id===S.cur?" cur":""}" data-act="open" data-id="${id}">
-      <div class="inline">${c.example?'<span class="chip">ukázka</span>':""}${c.clan?`<span class="chip clan">${esc(c.clan)}</span>`:""}${(()=>{const n=auditCount(c);return n.err+n.warn?`<span class="chip warnchip" title="Kontrola postavy – otevři List">⚠ ${n.err+n.warn}</span>`:""})()}</div>
+      <div class="inline">${c.example?'<span class="chip">ukázka</span>':""}${c.clan?`<span class="chip clan">${esc(c.clan)}</span>`:""}${c.player&&!c.example?`<span class="chip" title="Hráč">👤 ${esc(c.player)}</span>`:""}${(()=>{const n=auditCount(c);return n.err+n.warn?`<span class="chip warnchip" title="Kontrola postavy – otevři List">⚠ ${n.err+n.warn}</span>`:""})()}</div>
       <div class="pc-head"><label class="avatar${c.portrait?"":" empty"}" data-act="pickPortrait" title="${c.portrait?"Změnit obrázek":"Nahrát obrázek postavy"}">${c.portrait?`<img src="${c.portrait}" alt="">`:`<span>${esc((c.name||"?").trim().charAt(0).toUpperCase())}</span><em>+ foto</em>`}<input type="file" accept="image/*" data-act-change="portrait" data-id="${id}" hidden></label><h3>${esc(c.name||"Bez jména")}</h3></div>
       <div class="meta">${esc(c.concept||"Bez konceptu")}${c.chronicle?" · "+esc(c.chronicle):""}</div>
       <div class="meta mono">Hunger ${c.trk.hunger} · Humanity ${c.trk.hum} · XP ${xpAvail(c)}</div>
@@ -1523,7 +1549,7 @@ function vSheet(){
    <div class="small muted">Obrázek postavy – fotka, kresba nebo grafika. Uloží se zmenšený, jen do aplikace (do PDF nejde).${c.portrait?` <button class="btn sm ghost" data-act="rmPortrait">Odebrat obrázek</button>`:""}</div></div>
   <div class="grid g4">${f("name","Name")}${f("player","Player")}${f("chronicle","Chronicle")}${f("concept","Concept")}${f("clan","Clan","","dl-clans")}${f("predator","Predator Type","","dl-pred")}${f("generation","Generation","13th")}${f("sire","Sire")}${f("ambition","Ambition")}${f("desire","Desire")}${f("embrace","Embraced")}
   <div class="field"><span class="label">${G("Blood Potency")}</span>${dots("bp",c.bp,10)}</div></div>
-  <div id="clanInfo">${clanInfoHtml(c)}</div>${predBox(c)}</section>
+  ${assignBox(c)}<div id="clanInfo">${clanInfoHtml(c)}</div>${predBox(c)}</section>
   <section class="sec"><div class="sec-h"><h2>${T("Look & History","Vzhled a příběh")}</h2><span class="hint">Zůstává odemčené i u zamčené postavy</span></div>
   <div class="grid g2">${STORY.map(([k,en,cz,hint])=>`<label class="field"><span class="label">${T(en,cz,hint)}</span><textarea data-f="story.${k}" rows="3" placeholder="${esc(hint)}">${esc((c.story||{})[k]||"")}</textarea></label>`).join("")}</div></section>
   <section class="sec"><div class="sec-h"><h2>${G("Description")}</h2><span class="hint">Popis postavy – jde i na 4. stranu PDF${c.xpMode?" · zůstává odemčený":""}</span></div>
@@ -2745,7 +2771,7 @@ const A={
   wzIntroClose:()=>{const w=S.draft?.wz;if(w){w.seen=w.seen||{};w.seen[WSTEPS[S.draft.step][0]]=true;wzSave()}UI.introOpen=null;render()},
   wzIntroOpen:t=>{UI.introOpen=t.dataset.k;render()},
   wzIntroOff:t=>{NOINTRO=!!t.checked;try{localStorage.setItem(LKEY+"-nointro",NOINTRO?"1":"0")}catch(e){}},
-  stRefresh:()=>stLoad(),stOpen:t=>stOpen(t.dataset.u,t.dataset.c),stBack:()=>{ST.view=null;render()},stReload:()=>stOpen(ST.view.uid,ST.view.cid),
+  stRefresh:()=>stLoad(),askGive:()=>{UI.confirm="give";render()},stGive:()=>stGive(),stOpen:t=>stOpen(t.dataset.u,t.dataset.c),stBack:()=>{ST.view=null;render()},stReload:()=>stOpen(ST.view.uid,ST.view.cid),
   stPdf:()=>{if(ST.view?.c&&!UI.busy)exportSheet("pdf",ST.view.c)},
   stCopy:()=>{const c=ST.view?.c;if(!c)return;const n=addChar(clone(c),true);n.name=(c.name||"")+" (kopie od hráče)";touch("c_"+n.id);render();toast("Kopie uložena mezi tvé postavy")},
   ritPrep:t=>{const c=cur(),d=c.disc.find(x=>x.id===t.dataset.d),L=libFind("disciplines",d?.name),r=L?.rituals?.find(x=>x.name===t.dataset.n);if(!r)return;
@@ -2803,6 +2829,7 @@ document.addEventListener("change",e=>{const t=e.target;
   if(t.dataset.f==="predator"&&cur()&&UI.tab==="sheet"&&!cur().xpMode){const c=cur();ensurePredGrant(c);const g=c.predGrant,nv=t.value;
     if(libFind("predators",nv)&&(!g||lc(nv)!==lc(g.pred))){c.predator=g?g.pred:"";predModalInit(c,nv);render();return}}
   if(t.dataset.item&&t.dataset.f&&cur()){const it=getPath(cur(),t.dataset.f.replace(/\.name$/,"")),L=libFind("items",t.value);if(it&&L){if(!it.cat)it.cat=L.cat||"";if(!it.dmg)it.dmg=L.dmg||"";if(!it.armor)it.armor=L.armor||"";if(!it.note)it.note=L.desc||"";touchChar();render()}return}
+  if(t.dataset.actChange==="assignP"&&cur()){const c=cur(),v=t.value;UI.assignName=v==="__name"?c.id:null;if(v==="__name"){c.playerUid="";if(c.player&&(ST.players||[]).some(p=>lc(stPName(p.uid))===lc(c.player)))c.player=""}else if(v){c.playerUid=v;c.player=stPName(v)}else{c.playerUid="";c.player=""}UI.confirm=null;touchChar();render();return}
   if(t.dataset.actChange==="portrait"){const f=t.files&&t.files[0],id=t.dataset.id;t.value="";if(f)setPortrait(id,f);return}
   if(t.dataset.actChange==="wtFile"){const f=t.files&&t.files[0];t.value="";if(f)wtExport(f);return}
   if(t.dataset.rr||(t.dataset.f&&t.tagName==="SELECT"))render();
