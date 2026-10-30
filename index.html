@@ -2829,6 +2829,8 @@ const FIREBASE_CONFIG={
 };
 // 2) E-mail Vypravěče – jen tento účet vidí postavy všech hráčů (musí sedět i v pravidlech Firestore)
 const STORYTELLER_EMAIL="patrik.stastny@email.cz";
+// Vypravěč podle čísla účtu (Firebase → Authentication → Users → User UID) – nepotřebuje ověřený e-mail
+const STORYTELLER_UIDS=["p5qnhlYFwoackavMYWD6owFkIYh2"];
 
 const WEB={on:!!FIREBASE_CONFIG.apiKey,auth:null,fs:null,user:null};
 function fbDocRef(path){return WEB.fs.doc(path)}
@@ -2836,7 +2838,7 @@ function fbAdapter(){const snapDoc=d=>({id:d.id,exists:d.exists,data:()=>d.exist
   const docApi=path=>{const r=fbDocRef(path);return {id:r.id,path,get:async()=>snapDoc(await r.get()),set:d=>r.set(d),update:d=>r.update(d),delete:()=>r.delete()}};
   const colApi=path=>{const r=WEB.fs.collection(path);return {path,doc:id=>docApi(path+"/"+id),get:async()=>{const q=await r.get();return {docs:q.docs.map(snapDoc),size:q.size,empty:q.empty}}}};
   return {doc:docApi,collection:colApi}}
-function fbUser(u){return {_name:u.displayName||u.email||"",id:async()=>u.uid,isOwner:async()=>!!u.email&&u.email.toLowerCase()===STORYTELLER_EMAIL.toLowerCase()&&(u.emailVerified||u.providerData.some(p=>p.providerId==="google.com")),profiles:async()=>({})}}
+function fbUser(u){return {_name:u.displayName||u.email||"",id:async()=>u.uid,isOwner:async()=>STORYTELLER_UIDS.includes(u.uid)||(!!u.email&&u.email.toLowerCase()===STORYTELLER_EMAIL.toLowerCase()&&(u.emailVerified||u.providerData.some(p=>p.providerId==="google.com"))),profiles:async()=>({})}}
 function loginHTML(msg,err){return `<div class="modal-bg" style="z-index:80"><div class="modal" style="max-width:420px">
   <h3>Kronika krve</h3><p class="small muted" style="margin:4px 0 14px">Přihlas se – tvoje postavy se ukládají do tvého účtu a uvidíš je na každém počítači.</p>
   ${err?`<p class="note" style="color:var(--blood);margin-bottom:10px">${esc(err)}</p>`:""}${msg?`<p class="note" style="margin-bottom:10px">${esc(msg)}</p>`:""}
@@ -2871,7 +2873,7 @@ function webBoot(){
     window.claude={use:async n=>n==="db"?fbAdapter():n==="user"?fbUser(u):null};
     await initCloud();addLogout(u);render();addVerifyBar(u)})}
 function addVerifyBar(u){document.getElementById("fbVerify")?.remove();const isSTmail=!!u.email&&u.email.toLowerCase()===STORYTELLER_EMAIL.toLowerCase();
-  if(!isSTmail||u.emailVerified||u.providerData.some(p=>p.providerId==="google.com"))return;
+  if(!isSTmail||STORYTELLER_UIDS.includes(u.uid)||u.emailVerified||u.providerData.some(p=>p.providerId==="google.com"))return;
   const bar=document.createElement("div");bar.id="fbVerify";bar.className="note";bar.style.cssText="margin:0 0 14px;border-left:3px solid var(--blood)";
   bar.innerHTML=`<b>Záložka Vypravěč se objeví po ověření e-mailu ${esc(u.email)}.</b> Ověřovací odkaz přichází z adresy <i>noreply@kronika-krve.firebaseapp.com</i> – zkontroluj i složku Spam / Hromadné. <span class="inline" style="margin-top:6px;gap:8px"><button class="btn sm" data-act="fbResend">Poslat ověřovací e-mail znovu</button><button class="btn sm pri" data-act="fbVerified">Už jsem ověřil – obnovit</button></span>`;
   const v=document.getElementById("view");v.parentNode.insertBefore(bar,v)}
