@@ -2869,7 +2869,15 @@ function webBoot(){
     if(prev&&prev!==u.uid){try{localStorage.removeItem(LKEY)}catch(e){}initState()}
     try{localStorage.setItem(LKEY+"-uid",u.uid)}catch(e){}
     window.claude={use:async n=>n==="db"?fbAdapter():n==="user"?fbUser(u):null};
-    await initCloud();addLogout(u);render()})}
+    await initCloud();addLogout(u);render();addVerifyBar(u)})}
+function addVerifyBar(u){document.getElementById("fbVerify")?.remove();const isSTmail=!!u.email&&u.email.toLowerCase()===STORYTELLER_EMAIL.toLowerCase();
+  if(!isSTmail||u.emailVerified||u.providerData.some(p=>p.providerId==="google.com"))return;
+  const bar=document.createElement("div");bar.id="fbVerify";bar.className="note";bar.style.cssText="margin:0 0 14px;border-left:3px solid var(--blood)";
+  bar.innerHTML=`<b>Záložka Vypravěč se objeví po ověření e-mailu ${esc(u.email)}.</b> Ověřovací odkaz přichází z adresy <i>noreply@kronika-krve.firebaseapp.com</i> – zkontroluj i složku Spam / Hromadné. <span class="inline" style="margin-top:6px;gap:8px"><button class="btn sm" data-act="fbResend">Poslat ověřovací e-mail znovu</button><button class="btn sm pri" data-act="fbVerified">Už jsem ověřil – obnovit</button></span>`;
+  const v=document.getElementById("view");v.parentNode.insertBefore(bar,v)}
+Object.assign(A,{
+  fbResend:async()=>{try{await WEB.user.sendEmailVerification();toast("Ověřovací e-mail odeslán na "+WEB.user.email)}catch(e){toast(e?.code==="auth/too-many-requests"?"Příliš mnoho pokusů – zkus to za pár minut.":fbErr(e))}},
+  fbVerified:async()=>{try{await WEB.user.reload();await WEB.user.getIdToken(true)}catch(e){}if(WEB.user.emailVerified){toast("Ověřeno – načítám znovu…");setTimeout(()=>location.reload(),600)}else toast("E-mail zatím ověřený není – klikni na odkaz v e-mailu.")}});
 function addLogout(u){if(document.getElementById("fbOut"))return;const st=document.getElementById("status");if(!st)return;const b=document.createElement("button");b.id="fbOut";b.className="btn sm ghost";b.dataset.act="fbLogout";b.title=u.email||"";b.textContent="Odhlásit ("+(u.displayName||u.email||"účet")+")";st.parentNode.insertBefore(b,st.nextSibling)}
 
 initState();render();webBoot();
