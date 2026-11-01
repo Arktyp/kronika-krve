@@ -353,7 +353,7 @@ pre.json{max-height:220px;overflow:auto;background:var(--sunk);padding:10px;bord
 </head><body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v40 · 30. 10. 2026</span></h1><div class="who" id="who"></div></div>
+    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v41 · 1. 11. 2026</span></h1><div class="who" id="who"></div></div>
     <div class="inline" style="gap:14px;align-items:center"><label class="themesel">Vzhled <select id="themeSel" aria-label="Vzhled aplikace"><option value="auto">Podle systému</option><option value="light">Světlý</option><option value="dark">Tma a krev</option><option value="night">Noční Praha</option><option value="parchment">Pergamen</option></select></label><div class="status" id="status"><i></i><span>Načítám…</span></div></div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Sekce"></nav>
@@ -1017,13 +1017,20 @@ const cur=()=>S.chars[S.cur]||null;
 // samotné postavy zůstávají v jeho data/users/<id>/ – pravidla db je otevírají jen vlastníkovi.
 const ST={owner:false,loading:false,players:null,names:{},view:null,err:""};let lastRoster="";
 // ukázka, kterou hráč přepsal na svou postavu (jiné jméno nebo klan) – i ta se Vypravěči ukáže
+const draftUsed=d=>!!d&&(!!String(d.c?.name||"").trim()||(+d.step||0)>0);
+const charSum=c=>({id:c.id,name:c.name||"",clan:c.clan||"",concept:c.concept||"",pred:c.predator||"",xp:xpAvail(c),hum:c.trk?.hum??"",locked:!!c.xpMode,...(c.example?{ex:true}:{})});
+const draftSum=d=>({name:d.c?.name||"",clan:d.c?.clan||"",step:(d.step||0)+1,of:WSTEPS.length});
 const isEditedSample=c=>!!c.example&&(lc(c.name||"")!=="viktor hrabal"||lc(c.clan||"")!=="brujah");
-async function updateRoster(){if(!cloud?.db||!cloud.id)return;const body={chars:S.order.map(i=>S.chars[i]).filter(c=>c&&(!c.example||isEditedSample(c))).map(c=>({id:c.id,name:c.name||"",clan:c.clan||"",concept:c.concept||"",pred:c.predator||"",xp:xpAvail(c),hum:c.trk?.hum??"",locked:!!c.xpMode,...(c.example?{ex:true}:{})})),
-    draft:S.draft?{name:S.draft.c?.name||"",clan:S.draft.c?.clan||"",step:(S.draft.step||0)+1,of:WSTEPS.length}:null};
+async function updateRoster(){if(!cloud?.db||!cloud.id)return;const body={chars:S.order.map(i=>S.chars[i]).filter(c=>c&&(!c.example||isEditedSample(c))).map(charSum),
+    draft:draftUsed(S.draft)?draftSum(S.draft):null};
   if(cloud.dispName)body.who=cloud.dispName;const js=JSON.stringify(body);if(js===lastRoster)return;try{await cloud.db.doc("roster/"+cloud.id).set({...body,updated:Date.now()});lastRoster=js}catch(e){}}
 async function stLoad(){if(!cloud?.db||!ST.owner)return;ST.loading=true;ST.err="";render();
   try{const snap=await cloud.db.collection("roster").get();const players=snap.docs.filter(d=>d.exists&&d.id!==cloud.id).map(d=>({uid:d.id,...d.data()}));
     try{const ps=await cloud.user.profiles(players.map(p=>p.uid));players.forEach(p=>ST.names[p.uid]=(ps&&ps[p.uid]&&ps[p.uid].name)||p.who||"")}catch(e){players.forEach(p=>ST.names[p.uid]=p.who||"")}
+    await Promise.all(players.map(async p=>{try{const sn=await cloud.db.collection("data/users/"+p.uid).get();const chars=[];let draft=null,last=0;
+      sn.docs.forEach(d=>{if(!d.exists)return;const v=d.data()||{};let o;try{o=JSON.parse(v.json)}catch(e){return}last=Math.max(last,+v.updated||0);
+        if(d.id==="draft"){if(draftUsed(o))draft=draftSum(o)}else if(d.id.startsWith("c_")){const c=fixChar(o);if(!c.example||isEditedSample(c))chars.push({...charSum(c),upd:+v.updated||0})}});
+      chars.sort((a,b)=>(b.upd||0)-(a.upd||0));p.chars=chars;p.draft=draft;p.direct=true;if(last>(p.updated||0))p.updated=last}catch(e){p.direct=false}}));
     ST.players=players.sort((a,b)=>(b.updated||0)-(a.updated||0))}catch(e){ST.err="Seznam hráčů se nepodařilo načíst."}
   ST.loading=false;render()}
 async function stOpen(uid,cid){ST.view={uid,cid,loading:true};render();
@@ -1041,7 +1048,7 @@ function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
    <p class="small muted" style="margin:0 0 12px">Vidíš to jen ty jako vlastník stránky. Hráči vidí jen své postavy. Seznam se aktualizuje, když hráč aplikaci otevře a uloží změnu.</p>
    ${ST.err?`<p class="note">${esc(ST.err)}</p>`:""}
    ${ST.players===null?`<p class="muted">Načítám…</p>`:ST.players.length?ST.players.map(p=>`<div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">${esc(pname(p.uid))}</span><span class="small muted" style="margin-left:auto">${p.updated?"naposledy "+new Date(p.updated).toLocaleString("cs-CZ"):""}</span></div>
-     ${(p.chars||[]).length||mineFor(p).length||p.draft?`<div class="grid g3 stgrid" style="gap:10px">${mineFor(p).map(mineBtn).join("")}${p.draft?`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="__draft"><span class="pn">${esc(p.draft.name||"Bez jména")}<span class="cz">${esc(p.draft.clan||"")}</span><span class="cz" style="color:var(--blood)">· rozpracovaná</span></span><span class="small muted">v průvodci, krok ${esc(p.draft.step)} z ${esc(p.draft.of)}</span></button>`:""}${(p.chars||[]).map(ch=>`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="${esc(ch.id)}"><span class="pn">${esc(ch.name||"Bez jména")}<span class="cz">${esc([ch.clan,ch.pred].filter(Boolean).join(" · "))}</span>${ch.ex?'<span class="cz" style="color:var(--blood)">· upravená ukázka</span>':""}</span><span class="small muted">${esc(ch.concept||"")}</span><span class="mono small">XP ${esc(ch.xp)} · Humanity ${esc(ch.hum)}${ch.locked?"":" · neuzamčená"}</span></button>`).join("")}</div>`:`<p class="small muted">Zatím žádná postava.</p>`}</div>`).join(""):""}
+     ${(p.chars||[]).length||mineFor(p).length||p.draft?`<div class="grid g3 stgrid" style="gap:10px">${mineFor(p).map(mineBtn).join("")}${p.draft?`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="__draft"><span class="pn">${esc(p.draft.name||"Bez jména")}<span class="cz">${esc(p.draft.clan||"")}</span><span class="cz" style="color:var(--blood)">· rozpracovaná</span></span><span class="small muted">v průvodci, krok ${esc(p.draft.step)} z ${esc(p.draft.of)}</span></button>`:""}${(p.chars||[]).map(ch=>`<button class="pitem" style="text-align:left" data-act="stOpen" data-u="${esc(p.uid)}" data-c="${esc(ch.id)}"><span class="pn">${esc(ch.name||"Bez jména")}<span class="cz">${esc([ch.clan,ch.pred].filter(Boolean).join(" · "))}</span>${ch.ex?'<span class="cz" style="color:var(--blood)">· upravená ukázka</span>':""}</span><span class="small muted">${esc(ch.concept||"")}</span><span class="mono small">XP ${esc(ch.xp)} · Humanity ${esc(ch.hum)}${ch.locked?"":" · neuzamčená"}</span></button>`).join("")}</div>`:`<p class="small muted">${p.direct?"V účtu tohoto hráče není uložená žádná postava. Pokud ji hráč vidí, má ji nejspíš jen v prohlížeči (nepřihlášený) nebo v jiném účtu.":"Zatím žádná postava."}</p>`}</div>`).join(""):""}
    ${Object.keys(orphan).map(n=>`<div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">${esc(n)}</span><span class="small muted" style="margin-left:auto">zatím bez účtu – postavy máš u sebe</span></div><div class="grid g3 stgrid" style="gap:10px">${orphan[n].map(mineBtn).join("")}</div></div>`).join("")}
    ${ST.players&&!ST.players.length&&!Object.keys(orphan).length?`<div class="note">Zatím se nepřipojil žádný hráč. Pošli hráčům odkaz (viz Sdílení s hráči níže) – jakmile aplikaci otevřou a uloží postavu, objeví se tady. Postavu, kterou máš u sebe, můžeš hráči přiřadit na Listu postavy v části Identity.</div>`:""}
    ${typeof WEB!=="undefined"&&WEB.on?`<details class="card" style="margin-top:16px"><summary style="cursor:pointer"><b>Sdílení s hráči – jak na to</b></summary><ol class="small" style="margin:8px 0 0;padding-left:18px;line-height:1.6"><li>Pošli hráčům adresu této stránky.</li><li>Každý se přihlásí přes Google, nebo si vytvoří účet e-mailem a heslem.</li><li>Jakmile si uloží postavu, objeví se tady. Cizí postavy hráči nevidí.</li></ol></details>`:""}
@@ -1108,7 +1115,7 @@ async function initCloud(){
       }else if((r.updated||0)<lt)dirty.add(k);else S.synced[k]=true}
     if(snap.docs.some(d=>d.id.startsWith("c_")))for(const cid of [...S.order]){const c=S.chars[cid];if(c&&c.example&&!S.synced["c_"+cid]&&!remote["c_"+cid]){delete S.chars[cid];S.order=S.order.filter(x=>x!==cid);changed=true}}
     for(const cid of [...S.order]){const k="c_"+cid;if(!remote[k]){if(S.synced[k]){delete S.chars[cid];S.order=S.order.filter(x=>x!==cid);delete S.synced[k];changed=true}else dirty.add(k)}}
-    if(!remote.lib)dirty.add("lib");if(!remote.draft&&S.draft)dirty.add("draft");if(!remote.npcs&&S.npcs.length)dirty.add("npcs");
+    if(!remote.lib)dirty.add("lib");if(!remote.draft&&S.draft){if(S.synced.draft){S.draft=null;delete S.synced.draft;changed=true}else if(draftUsed(S.draft))dirty.add("draft")}if(!remote.npcs&&S.npcs.length)dirty.add("npcs");
     if(upgradeLib(S.lib)){S.stamps.lib=Date.now();dirty.add("lib");changed=true}
     if(S.cur&&!S.chars[S.cur])S.cur=S.order[0]||null;
     cloud={db,col,id,user,dispName:user._name||""};try{ST.owner=!!(await user.isOwner())}catch(e){ST.owner=false}
