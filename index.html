@@ -353,7 +353,7 @@ pre.json{max-height:220px;overflow:auto;background:var(--sunk);padding:10px;bord
 </head><body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v42 · 2. 11. 2026</span></h1><div class="who" id="who"></div></div>
+    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v45 · 2. 11. 2026</span></h1><div class="who" id="who"></div></div>
     <div class="inline" style="gap:14px;align-items:center"><label class="themesel">Vzhled <select id="themeSel" aria-label="Vzhled aplikace"><option value="auto">Podle systému</option><option value="light">Světlý</option><option value="dark">Tma a krev</option><option value="night">Noční Praha</option><option value="parchment">Pergamen</option></select></label><div class="status" id="status"><i></i><span>Načítám…</span></div></div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Sekce"></nav>
@@ -1047,6 +1047,8 @@ function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
     <div class="inline" style="margin-bottom:12px"><button class="btn" data-act="stBack">← Všichni hráči</button>${c?`<button class="btn" data-act="stReload">Načíst znovu</button><button class="btn pri" data-act="stFull">Otevřít celou postavu${V.draft?"":" / upravit"}</button><button class="btn" data-act="stJson">Stáhnout JSON</button><button class="btn" data-act="stPdf">Stáhnout PDF</button><button class="btn ghost" data-act="stCopy">Uložit kopii k sobě</button>`:""}</div>
     ${V.loading?`<p class="muted">Načítám…</p>`:V.err?`<p class="note">${esc(V.err)}</p>`:`${(()=>{const n=auditCount(c);return `<div class="note" style="margin-bottom:12px">Kontrola postavy: ${n.err+n.warn?`<b>${n.err} ${plural(n.err,"chyba","chyby","chyb")}, ${n.warn} k doplnění</b> – ${esc(n.all.filter(x=>x.lvl!=="info").slice(0,4).map(x=>x.msg).join(" · "))}${n.err+n.warn>4?"…":""}`:"vše v pořádku"} · XP k dispozici ${xpAvail(c)} · Hunger ${c.trk.hunger} · Humanity ${c.trk.hum}</div>`})()}<div class="sheetprev"><style>${SHEET_CSS}</style><div class="sheetscale">${sheetHTML(c)}</div></div>`}</section>`}
   return `<section class="sec"><div class="sec-h"><h2>Postavy hráčů</h2><span class="inline"><button class="btn sm" data-act="stRefresh">${ST.loading?"Načítám…":"Obnovit"}</button></span></div>
+   <div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">Pravidla stolu</span><span class="small muted" style="margin-left:auto">platí pro všechny hráče</span></div>
+    <label style="display:flex;flex-wrap:nowrap;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" style="margin-top:4px;flex:none" data-act-change="tableExtra"${TABLE.extraAdv?" checked":""}><span><b>Výhody navíc za Flaws navíc (1 : 1)</b><br><span class="small muted">Vypnuto = přesně 7 teček Merits a Backgrounds a 2 tečky Flaws (Ancilla +2 / +2), jak říkají pravidla V5. Zapnuto = výhod smí být víc, ale každá tečka navíc potřebuje tečku Flaws navíc.</span></span></label></div>
    <p class="small muted" style="margin:0 0 12px">Vidíš to jen ty jako vlastník stránky. Hráči vidí jen své postavy. Seznam se aktualizuje, když hráč aplikaci otevře a uloží změnu.</p>
    ${ST.err?`<p class="note">${esc(ST.err)}</p>`:""}
    ${ST.players===null?`<p class="muted">Načítám…</p>`:ST.players.length?ST.players.map(p=>`<div class="card" style="margin-bottom:12px"><div class="card-h"><span class="label">${esc(pname(p.uid))}</span><span class="small muted" style="margin-left:auto">${p.updated?"naposledy "+new Date(p.updated).toLocaleString("cs-CZ"):""}</span></div>
@@ -1138,7 +1140,7 @@ async function initCloud(){
     if(!remote.lib)dirty.add("lib");if(!remote.draft&&S.draft){if(S.synced.draft){S.draft=null;delete S.synced.draft;changed=true}else if(draftUsed(S.draft))dirty.add("draft")}if(!remote.npcs&&S.npcs.length)dirty.add("npcs");
     if(upgradeLib(S.lib)){S.stamps.lib=Date.now();dirty.add("lib");changed=true}
     if(S.cur&&!S.chars[S.cur])S.cur=S.order[0]||null;
-    cloud={db,col,id,user,dispName:user._name||""};try{ST.owner=!!(await user.isOwner())}catch(e){ST.owner=false}
+    cloud={db,col,id,user,dispName:user._name||""};loadTable();try{ST.owner=!!(await user.isOwner())}catch(e){ST.owner=false}
     if(changed||ST.owner)render();updateRoster();
     if(dirty.size)await saveNow();else setStatus("cloud","Uloženo ve tvém účtu");
   }catch(e){cloud=null;cloudNote="Účet nedostupný – uloženo v prohlížeči";setStatus("local",cloudNote)}
@@ -2194,6 +2196,30 @@ function mergeLib(lib){
 function fixChar(ch){const base=newChar();const c={...base,...ch};c.attrs={...base.attrs,...(ch.attrs||{})};c.skills={...base.skills,...(ch.skills||{})};c.trk={...base.trk,...(ch.trk||{})};c.trk.hp={...base.trk.hp,...(c.trk.hp||{})};c.trk.wp={...base.trk.wp,...(c.trk.wp||{})};["disc","adv","items","sections","xp","journal","rolls"].forEach(k=>{if(!Array.isArray(c[k]))c[k]=[]});c.disc.forEach(d=>{d.known=d.known||[];d.custom=d.custom||[];d.id=d.id||uid()});if(!/^[a-z0-9]+$/i.test(c.id||""))c.id=uid();return c}
 function addChar(ch,asCopy){const c=fixChar(clone(ch));if(asCopy||!c.id)c.id=uid();if(asCopy&&S.chars[ch.id])c.name=(c.name||"")+" (kopie)";S.chars[c.id]=c;if(!S.order.includes(c.id))S.order.push(c.id);S.cur=c.id;touch("c_"+c.id);return c}
 
+// Pravidla stolu – nastavuje Vypravěč, platí pro všechny hráče (settings/table v databázi)
+const TABLE={extraAdv:false};try{Object.assign(TABLE,JSON.parse(localStorage.getItem(LKEY+"-table")||"{}"))}catch(e){}
+async function loadTable(){if(!cloud?.db)return;try{const d=await cloud.db.doc("settings/table").get();if(d.exists){const o=d.data()||{};TABLE.extraAdv=!!o.extraAdv;try{localStorage.setItem(LKEY+"-table",JSON.stringify(TABLE))}catch(e){}render()}}catch(e){}}
+async function setTable(k,v){TABLE[k]=v;try{localStorage.setItem(LKEY+"-table",JSON.stringify(TABLE))}catch(e){}render();
+  try{await cloud.db.doc("settings/table").set({...TABLE,updated:Date.now()});toast(v?"Zapnuto pro všechny hráče":"Vypnuto pro všechny hráče")}catch(e){toast("Nastavení se nepodařilo uložit – nahrál jsi nová pravidla Firestore?")}}
+// Rozpočet výhod při tvorbě: výchozí přesně 7 + 2 (V5). Se zapnutým pravidlem stolu smí být výhod víc, ale každá tečka navíc potřebuje tečku Flaws navíc (1 : 1).
+function advBudget(m,f,mNeed,fNeed){
+  if(!TABLE.extraAdv){const out=[];
+    if(m<mNeed)out.push(["warn",`Merits a Backgrounds: ${m} z ${mNeed} teček.`]);
+    if(m>mNeed)out.push(["warn",`Merits a Backgrounds: ${m} ${plural(m,"tečka","tečky","teček")} místo ${mNeed} – o ${m-mNeed} víc, než dovolují pravidla.`]);
+    if(f<fNeed)out.push(["warn",`Flaws: ${f} z ${fNeed} teček.`]);
+    if(f>fNeed)out.push(["info",`Flaws: ${f} ${plural(f,"tečka","tečky","teček")} místo ${fNeed} – navíc, za Flaws navíc se nic nezískává.`]);
+    return {em:0,ef:0,out,mCls:m===mNeed?"ok":m>mNeed?"over":"",fCls:f===fNeed?"ok":f>fNeed?"over":""}}
+  const em=Math.max(0,m-mNeed),ef=Math.max(0,f-fNeed),out=[];
+  if(m<mNeed)out.push(["warn",`Merits a Backgrounds: ${m} z ${mNeed} teček${ef?` (+${ef} za Flaws navíc)`:""}.`]);
+  if(f<fNeed)out.push(["warn",`Flaws: ${f} z ${fNeed} teček.`]);
+  if(em>ef)out.push(["warn",`Merits a Backgrounds: ${em} ${plural(em,"tečka","tečky","teček")} navíc – za každou patří jedna tečka Flaws navíc. Doplň ještě ${em-ef} ${plural(em-ef,"tečku","tečky","teček")} Flaws, nebo výhody uber.`]);
+  if(ef>em&&m>=mNeed)out.push(["info",`Flaws: ${ef} ${plural(ef,"tečka","tečky","teček")} navíc – můžeš si za ně vzít ještě ${ef-em} ${plural(ef-em,"tečku","tečky","teček")} Merits nebo Backgrounds.`]);
+  const mOk=m>=mNeed&&m<=mNeed+ef,fOk=f>=fNeed+em;
+  return {em,ef,out,mCls:mOk?"ok":m>mNeed+ef?"over":"",fCls:fOk?"ok":""}}
+// věk postavy při tvorbě – podle zápisu „Startovní XP (Neonate)“, jinak podle startovních XP
+function advAge(c){const st=(c.xp||[]).find(x=>/Startovní XP/i.test(x.note||""));const m=st&&String(st.note).match(/\(([^)]+)\)/);
+  if(m){const k=Object.keys(AGES).find(k=>lc(AGES[k].en)===lc(m[1])||lc(AGES[k].cz)===lc(m[1]));if(k)return k}
+  if(st&&+st.amt>=35)return "ancilla";if(st&&+st.amt===0)return "childe";return "neonate"}
 /* ===================== KONTROLA POSTAVY (zpětná kompatibilita) ===================== */
 // lvl: err = porušené pravidlo, warn = chybí / k doplnění, info = upozornění; fix = automatická oprava
 function auditChar(c){const out=[],A0=(lvl,sec,msg,fix)=>out.push({lvl,sec,msg,fix});if(!c)return out;
@@ -2226,6 +2252,12 @@ function auditChar(c){const out=[],A0=(lvl,sec,msg,fix)=>out.push({lvl,sec,msg,f
       if(!m.dots.includes(+a.v||0))A0("warn","Advantages",`${a.name}: ${+a.v||0} ${plural(+a.v||0,"tečka","tečky","teček")} – povoleno ${m.dots.join(", ")}.`);
       (m.excl||[]).forEach(x=>{if(names.includes(lc(x))&&lc(x)!==lc(a.name)&&lc(a.name)<lc(x))A0("err","Advantages",`${a.name} a ${x} se navzájem vylučují.`)})}
     const miss=detMissing(a,a.det);if(miss.length)A0("warn","Advantages",`${a.name}: doplň ${miss.join(", ")}.`)});
+  // rozpočet teček při tvorbě (7 Advantages + 2 Flaws, Ancilla +2/+2); nepočítá výhody z typu predátora a tečky koupené za XP
+  if(!c.example){const ag=advAge(c),A=AGES[ag]||AGES.neonate,mNeed=7+(A.adv||0),fNeed=2+(A.flaw||0);
+   const bought=a=>c.xp.filter(x=>x.key==="adv:"+a.id&&(+x.amt||0)<0).length;
+   let m=0,f=0;c.adv.forEach(a=>{if(libFind("merits",a.name)?.tb)return;const v=Math.max(0,(+a.v||0)-(+a.fromPred||0)-bought(a));if(a.kind==="flaw")f+=v;else m+=v});
+   const tag=` (${A.en}; bez výhod z typu predátora a nákupů za XP)`;
+   advBudget(m,f,mNeed,fNeed).out.forEach(([lv,t])=>A0(lv,"Advantages",t.replace(/\.$/,"")+tag+"."))}
   // stopy
   if(!String(c.convictions||"").trim())A0("warn","Convictions","Chybí Convictions.");if(!String(c.touchstones||"").trim())A0("warn","Convictions","Chybí Touchstones.");
   const t=c.trk;if(t.hum<0||t.hum>10)A0("err","Stavy",`Humanity ${t.hum} je mimo rozsah 0–10.`,x=>{x.trk.hum=Math.max(0,Math.min(10,x.trk.hum))});
@@ -2330,7 +2362,7 @@ function wzIssues(){const D0=S.draft,c=D0.c,w=D0.wz,out=[],pr=wzPred();
     k.forEach(pn=>{const p=L?.powers.find(x=>x.name===pn);if(p&&p.req&&!reqOk(p.req,dm))out.push(["disc",`${pn} je amalgam a vyžaduje ${p.req}.`])})}
   for(const n in dd){const L=libFind("disciplines",n);if(!L?.rituals?.length)continue;const r1=L.rituals.filter(r=>r.level===1&&!ritBlock(r,dd[n],w.known[n]||[]));const sel=L.rituals.find(r=>r.name===w.rit[n]);
     if(sel&&ritBlock(sel,dd[n],w.known[n]||[]))out.push(["disc",`${sel.name}: ${ritBlock(sel,dd[n],w.known[n]||[])}.`]);else if(!sel&&r1.length)out.push(["disc",`${n}: vyber ${isFormula(L)?"formuli":L.ritKind==="Ceremony"?"ceremonii":"ritual"} zdarma.`])}
-  const av=advSums();if(av.m!==av.mNeed)out.push(["adv",`Merits a Backgrounds: ${av.m} z ${av.mNeed} teček.`]);if(av.f!==av.fNeed)out.push(["adv",`Flaws: ${av.f} z ${av.fNeed} teček.`]);
+  const av=advSums();advBudget(av.m,av.f,av.mNeed,av.fNeed).out.filter(x=>x[0]==="warn").forEach(x=>out.push(["adv",x[1]]));
   {const fin=wzFinalAdv(),ks=detKeys(fin);fin.forEach((a,i)=>{const m=detMissing(a,(w.det||{})[ks[i]]);if(m.length)out.push(["adv",`${a.name}: doplň ${m.join(", ")}.`])})}
   const all=wzFinalAdv(),ctx={clan:c.clan,discs:dm};
   all.forEach((a,i)=>{const L=libFind("merits",a.name);if(!L)return;const others=all.filter((_,j)=>j!==i);const why=advBlock({...L,multi:true,upg:[]},others,ctx);if(why&&!/^Už máš/.test(why))out.push(["adv",`${a.name}: ${why}.`]);if(a.v>Math.max(...L.dots))out.push(["adv",`${a.name}: maximum je ${Math.max(...L.dots)} ${plural(Math.max(...L.dots),"tečka","tečky","teček")}.`])});
@@ -2378,7 +2410,7 @@ function wzIntroModal(k,n){const w=S.draft.wz;w.seen=w.seen||{};const open=UI.in
    <div class="inline" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px"><label class="small inline"><input type="checkbox" data-act="wzIntroOff" ${NOINTRO?"checked":""} style="accent-color:var(--blood)"> Úvody už neukazovat</label><button class="btn pri" data-act="wzIntroClose">Jdu na to</button></div></div></div>`}
 function vWiz(){
   const D0=S.draft,[k,en,cz]=WSTEPS[D0.step],g1=WG[k],iss=wzIssues(),mine=iss.filter(x=>x[0]===k);
-  let p=g1.p;if(k==="adv"){const a=advSums();p=`Máš ${a.mNeed} teček na Merits a Backgrounds a musíš si vzít ${a.fNeed} ${plural(a.fNeed,"tečku","tečky","teček")} Flaws.`}
+  let p=g1.p;if(k==="adv"){const a=advSums();p=`Máš ${a.mNeed} teček na Merits a Backgrounds a musíš si vzít ${a.fNeed} ${plural(a.fNeed,"tečku","tečky","teček")} Flaws. ${TABLE.extraAdv?" Výhod můžeš mít i víc – za každou tečku navíc si ale vezmi jednu tečku Flaws navíc (pravidlo vašeho stolu).":""}`}
   return `<ol class="steps">${WSTEPS.map(([sk,se,sc],i)=>`<li><button data-act="wzGo" data-i="${i}" title="${sc}" aria-current="${i===D0.step}" class="${i<D0.step&&!iss.some(x=>x[0]===sk)?"done":""}"><span class="mono">${i+1}</span>${se}</button></li>`).join("")}</ol>
   <div class="wiz"><aside class="guide"><span class="label">Krok ${D0.step+1} z ${WSTEPS.length}</span><h2>${T(en,cz)}</h2><p><b>${g1.h}</b></p><p>${p}</p><ul>${g1.tips.map(t=>`<li>${t}</li>`).join("")}</ul>
   <div class="inline" style="margin-top:6px">${k!=="sum"?`<button class="btn sm" data-act="wzRandStep" data-k="${k}">Náhodně vyplnit tento krok</button>`:""}${UI.confirm==="rall"?`<span class="confirm">Přepsat celou postavu? <button class="btn sm pri" data-act="wzRandAll">Ano</button><button class="btn sm" data-act="cancel">Ne</button></span>`:`<button class="btn sm ghost" data-act="askRandAll">Náhodná postava (vše)</button>`}</div>
@@ -2450,7 +2482,8 @@ const WB={
     if(!upBy&&L){if(!L.multi&&!extBy&&x.v<Math.max(...L.dots))ex+=`<button class="btn sm" data-act="wzExt" data-n="${esc(x.name)}">+ Přidat tečky do ${esc(x.name)}</button>`;
       S.lib.merits.filter(u=>(u.upg||[]).map(lc).includes(lc(x.name))&&!c.adv.some(o=>lc(o.name)===lc(u.name))).forEach(u=>{const why=advBlock(u,rows,ctx);if(!why)ex+=`<button class="btn sm" data-act="wzUpg" data-n="${esc(u.name)}">Vylepšit na ${esc(u.name)} (${"●".repeat(u.dots[0])})</button>`})}
     return advRow(x,i,"_pred","d",true,{},ex,upBy?upBy.name:"")}).join("");
-  return `<div class="need-row"><span class="need ${a.m===a.mNeed?"ok":a.m>a.mNeed?"over":""}">Merits + Backgrounds ${a.m}/${a.mNeed}</span><span class="need ${a.f===a.fNeed?"ok":a.f>a.fNeed?"over":""}">Flaws ${a.f}/${a.fNeed}</span></div>
+  const bg=advBudget(a.m,a.f,a.mNeed,a.fNeed);
+  return `<div class="need-row"><span class="need ${bg.mCls}">Merits + Backgrounds ${a.m}/${a.mNeed}${bg.ef?` <small>(+${bg.ef} za Flaws navíc)</small>`:""}</span><span class="need ${bg.fCls}">Flaws ${a.f}/${a.fNeed}${bg.em?` <small>(+${bg.em} za výhody navíc)</small>`:""}</span></div>${bg.out.filter(x=>x[0]==="info"||x[1].includes("navíc")).map(x=>`<p class="small${x[0]==="warn"?"":" muted"}" style="margin:4px 0 0${x[0]==="warn"?";color:var(--blood)":""}">${esc(x[1])}</p>`).join("")}
   ${pg.length?`<div class="card"><div class="wsub">Z typu predátora (${esc(c.predator)})</div><p class="small muted" style="margin:4px 0 6px">Zdarma. Můžeš je rozšířit o další tečky nebo vylepšit – zaplatíš jen rozdíl.</p>${predHtml}</div>`:""}
   <div class="card"><div class="card-h"><span class="wsub">Tvoje volba</span>${UI.pick.open&&UI.pick.ctx==="wiz"?"":`<button class="btn" data-act="pickOpen" data-ctx="wiz" style="margin-left:auto">+ Přidat z knihovny</button>`}</div>
   ${UI.pick.open&&UI.pick.ctx==="wiz"?advPicker(rows,ctx,"d"):""}
@@ -2866,6 +2899,7 @@ document.addEventListener("change",e=>{const t=e.target;
   if(t.dataset.f==="predator"&&cur()&&UI.tab==="sheet"&&!cur().xpMode){const c=cur();ensurePredGrant(c);const g=c.predGrant,nv=t.value;
     if(libFind("predators",nv)&&(!g||lc(nv)!==lc(g.pred))){c.predator=g?g.pred:"";predModalInit(c,nv);render();return}}
   if(t.dataset.item&&t.dataset.f&&cur()){const it=getPath(cur(),t.dataset.f.replace(/\.name$/,"")),L=libFind("items",t.value);if(it&&L){if(!it.cat)it.cat=L.cat||"";if(!it.dmg)it.dmg=L.dmg||"";if(!it.armor)it.armor=L.armor||"";if(!it.note)it.note=L.desc||"";touchChar();render()}return}
+  if(t.dataset.actChange==="tableExtra"){setTable("extraAdv",!!t.checked);return}
   if(t.dataset.actChange==="assignP"&&cur()){const c=cur(),v=t.value;UI.assignName=v==="__name"?c.id:null;if(v==="__name"){c.playerUid="";if(c.player&&(ST.players||[]).some(p=>lc(stPName(p.uid))===lc(c.player)))c.player=""}else if(v){c.playerUid=v;c.player=stPName(v)}else{c.playerUid="";c.player=""}UI.confirm=null;touchChar();render();return}
   if(t.dataset.actChange==="portrait"){const f=t.files&&t.files[0],id=t.dataset.id;t.value="";if(f)setPortrait(id,f);return}
   if(t.dataset.actChange==="wtFile"){const f=t.files&&t.files[0];t.value="";if(f)wtExport(f);return}
