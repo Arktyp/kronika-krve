@@ -353,7 +353,7 @@ pre.json{max-height:220px;overflow:auto;background:var(--sunk);padding:10px;bord
 </head><body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v41 · 1. 11. 2026</span></h1><div class="who" id="who"></div></div>
+    <div class="brand"><h1>Kronika krve <span class="ver" title="Verze aplikace">v42 · 2. 11. 2026</span></h1><div class="who" id="who"></div></div>
     <div class="inline" style="gap:14px;align-items:center"><label class="themesel">Vzhled <select id="themeSel" aria-label="Vzhled aplikace"><option value="auto">Podle systému</option><option value="light">Světlý</option><option value="dark">Tma a krev</option><option value="night">Noční Praha</option><option value="parchment">Pergamen</option></select></label><div class="status" id="status"><i></i><span>Načítám…</span></div></div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Sekce"></nav>
@@ -1010,7 +1010,9 @@ function initState(){
   try{const u=JSON.parse(localStorage.getItem(LKEY+"-ui")||"{}");if(u.tab)UI.tab=u.tab}catch(e){}
   if(UI.tab==="wiz"&&!S.draft)UI.tab="chars";
 }
-const cur=()=>S.chars[S.cur]||null;
+// PEEK = Vypravěč má otevřenou postavu hráče v plné aplikaci (změny se ukládají jen tlačítkem do účtu hráče)
+let PEEK=null;
+const cur=()=>PEEK?PEEK.c:(S.chars[S.cur]||null);
 
 /* ===================== SAVE / SYNC ===================== */
 // Vypravěč (vlastník stránky) vidí postavy všech hráčů: každý hráč si do roster/<své id> zapíše seznam svých postav,
@@ -1042,7 +1044,7 @@ function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
   const matched=new Set();(ST.players||[]).forEach(p=>mineFor(p).forEach(c=>matched.add(c.id)));
   const orphan={};S.order.map(i=>S.chars[i]).filter(c=>c&&!c.example&&c.player&&!matched.has(c.id)).forEach(c=>{(orphan[c.player]=orphan[c.player]||[]).push(c)});
   if(V){const c=V.c;return `<section class="sec"><div class="sec-h"><h2>${c?esc(c.name||"Bez jména"):"Postava"}</h2><span class="hint">${esc(pname(V.uid))}${V.draft?" · rozpracovaná v průvodci":""}${V.updated?" · uloženo "+new Date(V.updated).toLocaleString("cs-CZ"):""}</span></div>
-    <div class="inline" style="margin-bottom:12px"><button class="btn" data-act="stBack">← Všichni hráči</button>${c?`<button class="btn" data-act="stReload">Načíst znovu</button><button class="btn pri" data-act="stPdf">Stáhnout PDF</button><button class="btn ghost" data-act="stCopy">Uložit kopii k sobě</button>`:""}</div>
+    <div class="inline" style="margin-bottom:12px"><button class="btn" data-act="stBack">← Všichni hráči</button>${c?`<button class="btn" data-act="stReload">Načíst znovu</button><button class="btn pri" data-act="stFull">Otevřít celou postavu${V.draft?"":" / upravit"}</button><button class="btn" data-act="stJson">Stáhnout JSON</button><button class="btn" data-act="stPdf">Stáhnout PDF</button><button class="btn ghost" data-act="stCopy">Uložit kopii k sobě</button>`:""}</div>
     ${V.loading?`<p class="muted">Načítám…</p>`:V.err?`<p class="note">${esc(V.err)}</p>`:`${(()=>{const n=auditCount(c);return `<div class="note" style="margin-bottom:12px">Kontrola postavy: ${n.err+n.warn?`<b>${n.err} ${plural(n.err,"chyba","chyby","chyb")}, ${n.warn} k doplnění</b> – ${esc(n.all.filter(x=>x.lvl!=="info").slice(0,4).map(x=>x.msg).join(" · "))}${n.err+n.warn>4?"…":""}`:"vše v pořádku"} · XP k dispozici ${xpAvail(c)} · Hunger ${c.trk.hunger} · Humanity ${c.trk.hum}</div>`})()}<div class="sheetprev"><style>${SHEET_CSS}</style><div class="sheetscale">${sheetHTML(c)}</div></div>`}</section>`}
   return `<section class="sec"><div class="sec-h"><h2>Postavy hráčů</h2><span class="inline"><button class="btn sm" data-act="stRefresh">${ST.loading?"Načítám…":"Obnovit"}</button></span></div>
    <p class="small muted" style="margin:0 0 12px">Vidíš to jen ty jako vlastník stránky. Hráči vidí jen své postavy. Seznam se aktualizuje, když hráč aplikaci otevře a uloží změnu.</p>
@@ -1061,7 +1063,7 @@ function vST(){if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
 // ---- přiřazení postavy hráči (vidí a mění jen Vypravěč)
 const stPName=uid=>ST.names[uid]||(ST.players||[]).find(p=>p.uid===uid)?.who||"Hráč "+String(uid).slice(0,6);
 const mineFor=p=>S.order.map(i=>S.chars[i]).filter(c=>c&&!c.example&&(c.playerUid?c.playerUid===p.uid:(c.player&&lc(c.player)===lc(stPName(p.uid)))));
-function assignBox(c){if(!ST.owner)return "";if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
+function assignBox(c){if(!ST.owner||PEEK)return "";if(ST.players===null&&!ST.loading)setTimeout(stLoad,0);
   const ps=ST.players||[],canGive=typeof WEB!=="undefined"&&WEB.on&&c.playerUid&&ps.some(p=>p.uid===c.playerUid);
   const sel=c.playerUid&&ps.some(p=>p.uid===c.playerUid)?c.playerUid:(c.player||UI.assignName===c.id?"__name":"");
   return `<div class="note assign" style="margin-top:12px"><div class="inline" style="flex-wrap:wrap;gap:8px"><b>Postava hráče</b><span class="small muted">vidíš jen ty jako Vypravěč – postava se pak ukáže v záložce Vypravěč u daného hráče</span></div>
@@ -1079,8 +1081,26 @@ async function stGive(){const c=cur();if(!c||!c.playerUid||!cloud?.db)return;con
     UI.busy=false;UI.tab="st";ST.view=null;await stLoad();toast(`Předáno hráči ${nm}`)}
   catch(e){UI.busy=false;render();toast("Předání se nepovedlo – nahrál jsi nová pravidla Firestore?")}}
 
+function peekBar(){const P=PEEK,canSave=typeof WEB!=="undefined"&&WEB.on&&!P.ro;
+  return `<div class="note peekbar" style="margin-bottom:16px;border-left:4px solid var(--blood)"><div class="inline" style="flex-wrap:wrap;gap:8px"><span><b>Postava hráče ${esc(stPName(P.uid))}</b> – máš ji otevřenou jako Vypravěč${P.ro?" (rozpracovaná v průvodci – jen náhled)":""}. ${canSave?"Změny se hráči uloží až tlačítkem <b>Uložit hráči</b>.":"Změny se nikam neukládají."}</span>
+   <span id="peekState" class="${P.dirty?"need":"need ok"}">${P.dirty?"Neuložené změny":"Beze změn"}</span>
+   <span style="margin-left:auto" class="inline">${P.conflict?`<span class="confirm">Hráč postavu mezitím změnil (${new Date(P.conflict).toLocaleString("cs-CZ")}). <button class="btn sm pri" data-act="peekSave" data-force="1">Přepsat jeho změny</button><button class="btn sm" data-act="peekReload">Načíst jeho verzi</button></span>`:""}
+    ${canSave&&!P.conflict?`<button class="btn sm pri" id="peekSaveBtn" data-act="peekSave"${P.dirty?"":" disabled"}>Uložit hráči</button>`:""}<button class="btn sm" data-act="peekJson">Stáhnout JSON</button><button class="btn sm ghost" data-act="peekClose">Zavřít</button></span></div>
+   ${P.askClose?`<div class="confirm" style="margin-top:8px">Máš neuložené změny. <button class="btn sm pri" data-act="peekClose" data-force="1">Zahodit a zavřít</button><button class="btn sm" data-act="cancelPeekClose">Zpět</button></div>`:""}</div>`}
+async function peekOpen(uid,cid,c,updated){const pc=fixChar(clone(c));PEEK={uid,c:pc,loaded:+updated||0,dirty:false};ensurePredGrant(pc);PEEK.dirty=false;UI.rrSel=[];UI.buy=null;UI.tab="sheet";render();window.scrollTo(0,0)}
+async function peekSave(force){const P=PEEK;if(!P||!cloud?.db)return;const ref=cloud.db.doc(`data/users/${P.uid}/c_${P.c.id}`);
+  try{if(!force){const d=await ref.get();const u=d.exists?+d.data().updated||0:0;if(u>P.loaded){P.conflict=u;render();return}}
+    P.c.xp.push({id:uid(),date:today(),amt:0,note:"Úpravu udělal Vypravěč",key:"note",lvl:0});
+    const now=Date.now();await ref.set({json:JSON.stringify(P.c),updated:now});P.loaded=now;P.dirty=false;P.conflict=0;
+    try{const r=await cloud.db.doc("roster/"+P.uid).get();if(r.exists){const b=r.data();const chars=(b.chars||[]).filter(x=>x.id!==P.c.id);chars.push(charSum(P.c));await cloud.db.doc("roster/"+P.uid).set({...b,chars})}}catch(e){}
+    render();toast(`Uloženo do účtu hráče ${stPName(P.uid)}`)}
+  catch(e){toast("Uložení se nepovedlo – zkontroluj pravidla Firestore")}}
+async function peekReload(){const P=PEEK;if(!P)return;try{const d=await cloud.db.doc(`data/users/${P.uid}/c_${P.c.id}`).get();if(!d.exists)throw 0;await peekOpen(P.uid,P.c.id,JSON.parse(d.data().json),d.data().updated);toast("Načtena aktuální verze hráče")}catch(e){toast("Postavu se nepodařilo načíst")}}
+const jsonOf=c=>JSON.stringify({app:"nocni-archiv",version:2,kind:"character",exported:new Date().toISOString(),data:c},null,2);
+function closePeek(){PEEK=null;UI.tab="st";UI.buy=null;if(ST.view)stOpen(ST.view.uid,ST.view.cid);else render();window.scrollTo(0,0)}
+
 let cloud=null, dirty=new Set(), saveT=null, cloudNote="";
-function touch(key){S.stamps[key]=Date.now();dirty.add(key);scheduleSave()}
+function touch(key){if(PEEK&&key==="c_"+PEEK.c.id){PEEK.dirty=true;const el=document.getElementById("peekState");if(el){el.textContent="Neuložené změny";el.className="need"}const sb=document.getElementById("peekSaveBtn");if(sb)sb.disabled=false;return}S.stamps[key]=Date.now();dirty.add(key);scheduleSave()}
 const touchChar=()=>{if(cur())touch("c_"+cur().id)};
 function scheduleSave(){clearTimeout(saveT);setStatus("busy","Ukládám…");saveT=setTimeout(saveNow,500)}
 async function saveNow(){
@@ -1420,19 +1440,20 @@ function advRow(a,i,pfx,scope,locked,rel={},extra="",replacedBy=""){
 }
 
 /* ===================== RENDER ===================== */
-function tabsList(){const t=[["chars","Postavy"]];if(S.draft)t.push(["wiz","Průvodce"]);const r=t.concat([["sheet","List postavy"],["play","Hra"],["log","Deník a XP"],["npc","NPC"],["lib","Knihovna"],["io","Záloha"]]);if(ST.owner)r.push(["st","Vypravěč"]);return r}
+function tabsList(){if(PEEK)return [["sheet","List postavy"],["play","Hra"],["log","Deník a XP"]];const t=[["chars","Postavy"]];if(S.draft)t.push(["wiz","Průvodce"]);const r=t.concat([["sheet","List postavy"],["play","Hra"],["log","Deník a XP"],["npc","NPC"],["lib","Knihovna"],["io","Záloha"]]);if(ST.owner)r.push(["st","Vypravěč"]);return r}
 function render(){
   hideTip();
   if(UI.tab!=="sheet"&&!(UI.tab==="play"&&UI.buy?.kind==="hum"))UI.buy=null;
   const c=cur();
-  document.getElementById("who").textContent=UI.tab==="wiz"&&S.draft?`Tvorba postavy: ${S.draft.c.name||"bez jména"}`:c?`${c.name||"Bez jména"}${c.clan?" · "+c.clan:""}${c.example?" · ukázka":""}`:"Žádná postava není otevřená";
+  document.getElementById("who").textContent=UI.tab==="wiz"&&S.draft?`Tvorba postavy: ${S.draft.c.name||"bez jména"}`:c?`${c.name||"Bez jména"}${c.clan?" · "+c.clan:""}${c.example?" · ukázka":""}${PEEK?" · postava hráče "+stPName(PEEK.uid):""}`:"Žádná postava není otevřená";
   document.getElementById("tabs").innerHTML=tabsList().map(([k,l])=>`<button data-act="tab" data-tab="${k}" aria-current="${UI.tab===k}"${k==="wiz"?' class="wizt"':""}>${l}</button>`).join("");
   fillDatalists();
   const v=document.getElementById("view");
   if(UI.tab==="wiz"&&!S.draft)UI.tab="chars";
   if(["sheet","play","log"].includes(UI.tab)&&!c){v.innerHTML=`<div class="empty"><p>Nejdřív vytvoř nebo otevři postavu.</p><p style="margin-top:12px"><button class="btn pri" data-act="wzStart">Nová postava s průvodcem</button></p></div>`;return}
   if(UI.tab==="st"&&!ST.owner)UI.tab="chars";
-  v.innerHTML=({chars:vChars,wiz:vWiz,sheet:vSheet,play:vPlay,log:vLog,npc:vNpc,lib:vLib,io:vIO,st:vST})[UI.tab]();
+  if(PEEK&&!["sheet","play","log"].includes(UI.tab))UI.tab="sheet";
+  v.innerHTML=(PEEK?peekBar():"")+({chars:vChars,wiz:vWiz,sheet:vSheet,play:vPlay,log:vLog,npc:vNpc,lib:vLib,io:vIO,st:vST})[UI.tab]();
   applyCollapse();applyLock();
   document.getElementById("buy").innerHTML=buyBar();document.body.style.paddingBottom=UI.buy?"140px":"";
   UI.fresh=false;
@@ -1449,7 +1470,7 @@ const lockedF=(c,p)=>!!(c&&c.xpMode&&p&&!LOCK_OK.some(r=>r.test(p))&&!OPEN_DET.h
 function applyLock(){const c=cur();if(UI.tab!=="sheet"||!c||!c.xpMode)return;const root=document.getElementById("view");if(!root||!root.querySelectorAll)return;
   root.querySelectorAll("[data-f]").forEach(el=>{const pf=el.dataset.f;if(/^adv\.\d+\.det\./.test(pf)&&!String(getPath(c,pf)??"").trim())OPEN_DET.add(c.id+"|"+pf);if(!lockedF(c,pf))return;if(el.tagName==="SELECT"||el.type==="checkbox")el.disabled=true;else{el.readOnly=true;el.tabIndex=-1;el.removeAttribute("list");el.placeholder=""}el.classList.add("locked-in")});
   root.querySelectorAll('[data-act="detRand"][data-s="f"],[data-act="detSkill"][data-s="f"]').forEach(b=>{const d=getPath(c,b.dataset.p)||{};const miss=b.dataset.act==="detRand"?!b.dataset.all:((d.skills||[]).length<+b.dataset.max);if(miss)return;b.disabled=true;b.title="Uzamčeno"})}
-async function setPortrait(id,file){const c=S.chars[id];if(!c)return;if(!/^image\//.test(file.type)){toast("Tohle není obrázek.");return}
+async function setPortrait(id,file){const c=PEEK&&PEEK.c.id===id?PEEK.c:S.chars[id];if(!c)return;if(!/^image\//.test(file.type)){toast("Tohle není obrázek.");return}
   try{const url=URL.createObjectURL(file);const img=await new Promise((ok,ko)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=ko;im.src=url});
     const S0=320,side=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-side)/2,sy=(img.naturalHeight-side)/2*0.6;
     const cv=document.createElement("canvas");cv.width=S0;cv.height=S0;const g=cv.getContext("2d");g.fillStyle="#1a1414";g.fillRect(0,0,S0,S0);g.drawImage(img,sx,sy,side,side,0,0,S0,S0);URL.revokeObjectURL(url);
@@ -2783,7 +2804,11 @@ const A={
   wzIntroClose:()=>{const w=S.draft?.wz;if(w){w.seen=w.seen||{};w.seen[WSTEPS[S.draft.step][0]]=true;wzSave()}UI.introOpen=null;render()},
   wzIntroOpen:t=>{UI.introOpen=t.dataset.k;render()},
   wzIntroOff:t=>{NOINTRO=!!t.checked;try{localStorage.setItem(LKEY+"-nointro",NOINTRO?"1":"0")}catch(e){}},
-  stRefresh:()=>stLoad(),askGive:()=>{UI.confirm="give";render()},stGive:()=>stGive(),stOpen:t=>stOpen(t.dataset.u,t.dataset.c),stBack:()=>{ST.view=null;render()},stReload:()=>stOpen(ST.view.uid,ST.view.cid),
+  stRefresh:()=>stLoad(),
+  stJson:()=>{const c=ST.view?.c;if(c)saveFile(`vtm-${slug(c.name)}.json`,jsonOf(c),"application/json")},
+  stFull:()=>{const V=ST.view;if(!V?.c)return;if(V.draft){PEEK={uid:V.uid,c:fixChar(clone(V.c)),loaded:Infinity,dirty:false,ro:true};UI.tab="sheet";render();return}peekOpen(V.uid,V.cid,V.c,V.updated)},
+  peekSave:t=>peekSave(!!t.dataset.force),peekReload:()=>peekReload(),peekJson:()=>{if(PEEK)saveFile(`vtm-${slug(PEEK.c.name)}.json`,jsonOf(PEEK.c),"application/json")},
+  peekClose:t=>{if(PEEK?.dirty&&!t.dataset.force&&!PEEK.ro){PEEK.askClose=true;render();return}closePeek()},cancelPeekClose:()=>{if(PEEK){PEEK.askClose=false;render()}},askGive:()=>{UI.confirm="give";render()},stGive:()=>stGive(),stOpen:t=>stOpen(t.dataset.u,t.dataset.c),stBack:()=>{ST.view=null;render()},stReload:()=>stOpen(ST.view.uid,ST.view.cid),
   stPdf:()=>{if(ST.view?.c&&!UI.busy)exportSheet("pdf",ST.view.c)},
   stCopy:()=>{const c=ST.view?.c;if(!c)return;const n=addChar(clone(c),true);n.name=(c.name||"")+" (kopie od hráče)";touch("c_"+n.id);render();toast("Kopie uložena mezi tvé postavy")},
   ritPrep:t=>{const c=cur(),d=c.disc.find(x=>x.id===t.dataset.d),L=libFind("disciplines",d?.name),r=L?.rituals?.find(x=>x.name===t.dataset.n);if(!r)return;
